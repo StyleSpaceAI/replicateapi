@@ -13,7 +13,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-type client struct {
+// Client for the replicate.com api. Use NewClient for smooth initialization
+type Client struct {
 	AuthorizationToken string
 	Owner              string
 	Model              string
@@ -34,13 +35,13 @@ func buildURL(path string) string {
 }
 
 // NewClient creates a new API client
-func NewClient(token, model, version string) (*client, error) {
+func NewClient(token, model, version string) (*Client, error) {
 	splits := strings.Split(model, "/")
 	if len(splits) != 2 {
 		return nil, errors.New("format of the model name must be owner/modelname")
 	}
 
-	return &client{
+	return &Client{
 		AuthorizationToken: token,
 		Owner:              splits[0],
 		Model:              splits[1],
@@ -70,7 +71,7 @@ type PredictionResult struct {
 }
 
 // CreatePrediction will register an asynchronous prediction request with the replicate API
-func (c *client) CreatePrediction(ctx context.Context, input map[string]interface{}) (*PredictionResult, error) {
+func (c *Client) CreatePrediction(ctx context.Context, input map[string]interface{}) (*PredictionResult, error) {
 	const path = "/predictions"
 
 	type request struct {
@@ -125,7 +126,7 @@ const (
 )
 
 // Refresh the status of the prediction inplace
-func (p *PredictionResult) Refresh(ctx context.Context, c *client) error {
+func (p *PredictionResult) Refresh(ctx context.Context, c *Client) error {
 	readCloser, err := c.getResult(ctx, p.ID)
 	if err != nil {
 		return err
@@ -139,7 +140,7 @@ func (p *PredictionResult) Refresh(ctx context.Context, c *client) error {
 	return nil
 }
 
-func (c *client) getResult(ctx context.Context, id string) (io.ReadCloser, error) {
+func (c *Client) getResult(ctx context.Context, id string) (io.ReadCloser, error) {
 	const path = "/predictions/"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, buildURL(path+id), nil)
@@ -158,7 +159,7 @@ func (c *client) getResult(ctx context.Context, id string) (io.ReadCloser, error
 }
 
 // GetResult of a prediction by its ID
-func (c *client) GetResult(ctx context.Context, predictionID string) (*PredictionResult, error) {
+func (c *Client) GetResult(ctx context.Context, predictionID string) (*PredictionResult, error) {
 	readCloser, err := c.getResult(ctx, predictionID)
 	if err != nil {
 		return nil, err
