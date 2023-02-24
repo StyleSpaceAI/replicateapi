@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -88,18 +89,20 @@ func (c *Client) CreatePrediction(ctx context.Context, input map[string]interfac
 		return nil, errors.Wrap(err, "encode request")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, buildURL(path), bytes.NewReader(reqBodyb))
+	req, err := c.newReq(ctx, http.MethodPost, buildURL(path), bytes.NewReader(reqBodyb))
 	if err != nil {
-		return nil, errors.Wrap(err, "init new request")
+		return nil, err
 	}
-	req.Header.Add("Authorization", "Token "+c.AuthorizationToken)
-	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "create prediction request")
 	}
 	defer resp.Body.Close()
+
+	if err = handleStatusCode(resp.StatusCode); err != nil {
+		return nil, err
+	}
 
 	respBody := &PredictionResult{}
 	err = json.NewDecoder(resp.Body).Decode(respBody)
@@ -143,16 +146,19 @@ func (p *PredictionResult) Refresh(ctx context.Context, c *Client) error {
 func (c *Client) getResult(ctx context.Context, id string) (io.ReadCloser, error) {
 	const path = "/predictions/"
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, buildURL(path+id), nil)
+	req, err := c.newReq(ctx, http.MethodGet, buildURL(path+id), nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "init new request")
+		return nil, err
 	}
-	req.Header.Add("Authorization", c.AuthorizationToken)
-	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "create prediction request")
+	}
+
+	if err = handleStatusCode(resp.StatusCode); err != nil {
+		defer resp.Body.Close()
+		return nil, err
 	}
 
 	return resp.Body, nil
@@ -172,4 +178,61 @@ func (c *Client) GetResult(ctx context.Context, predictionID string) (*Predictio
 		return nil, errors.Wrap(err, "decoding the response")
 	}
 	return respBody, nil
+}
+
+// ModelVersion represents a single version of the model with the related schema
+type ModelVersion struct {
+	ID            string                 `json:"id"`
+	CreatedAt     time.Time              `json:"created_at"`
+	CogVersion    string                 `json:"cog_version"`
+	OpenapiSchema map[string]interface{} `json:"openapi_schema"`
+}
+
+// GetModelVersions will return the list of versions available for the model set in the client
+// All the versions are sorted by the creation time
+func (c *Client) GetModelVersions(ctx context.Context) ([]*ModelVersion, error) {
+	path := fmt.Sprintf("/models/%s/%s/versions", c.Owner, c.Model)
+
+	req, err := c.newReq(ctx, http.MethodGet, buildURL(path), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "create prediction request")
+	}
+	defer resp.Body.Close()
+
+	if err = handleStatusCode(resp.StatusCode); err != nil {
+		return nil, err
+	}
+
+	type response struct {
+		Previous any             `json:"previous"`
+		Next     any             `json:"next"`
+		Results  []*ModelVersion `json:"results"`
+	}
+
+	respBody := &response{}
+	err = json.NewDecoder(resp.Body).Decode(respBody)
+	if err != nil {
+		return nil, errors.Wrap(err, "decode the response")
+	}
+
+	sort.Slice(respBody.Results, func(i, j int) bool {
+		return respBody.Results[i].CreatedAt.After(respBody.Results[j].CreatedAt)
+	})
+	return respBody.Results, nil
+}
+
+func (c *Client) newReq(ctx context.Context, method string, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, errors.Wrap(err, "init new request")
+	}
+	req.Header.Add("Authorization", "Token "+c.AuthorizationToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	return req, nil
 }

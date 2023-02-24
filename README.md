@@ -12,30 +12,52 @@ go get github.com/StyleSpaceAI/replicateapi@latest
 import "github.com/StyleSpaceAI/replicateapi"
 
 const (
-    token = "totalyvalidtoken"
+    token = "getYourTokenFromReplicateProfile"
     MODELNAME = "stability-ai/stable-diffusion"
-    MODELVERSION = "db21e45d3f7023abc2a46ee38a23973f6dce16bb082a930b0c49861f96d1e5bf"
 )
 
 func main() {
     // Initialize a new API client
-    cli, err := replicateapi.NewClient(token, MODELNAME, MODELVERSION)
-    if err != nil {
-	    log.Fatal("init client", err)
-    }
+	cli, err := replicateapi.NewClient(token, MODELNAME, "")
+	if err != nil {
+		log.Fatal("init client", err)
+	}
 
-    // Register an asynchronous prediction task
-    result, err := cli.CreatePrediction(context.Background(), map[string]interface{}{
-	    "prompt": "putin sucks huge cock, 4k",
-    })
-    if err != nil {
-	    log.Fatal("create prediction", err)
-    }
+	// Fetch all the available versions for this model
+	vers, err := cli.GetModelVersions(context.Background())
+	if err != nil {
+		log.Fatal("fetch versions", err)
+	}
 
-    // Fetch status and results of existing prediction
-    result, err = cli.GetResult(context.Background(), result.ID)
-    if err != nil {
-	    log.Fatal("fetch prediction result", err)
-    }
+	// Picking the latest version of the model
+	cli.Version = vers[0].ID
+
+	// Register an asynchronous prediction task
+	result, err := cli.CreatePrediction(context.Background(), map[string]interface{}{
+		"prompt": "putin sucks huge cock, 4k",
+	})
+	if err != nil {
+		log.Fatal("create prediction", err)
+	}
+
+	// The response of the API is async, so we need to wait for the response
+	for keepChecking := true; keepChecking; {
+		time.Sleep(time.Second * 3)
+
+		// Fetch status and results of existnig prediction
+		result, err = cli.GetResult(context.Background(), result.ID)
+		if err != nil {
+			log.Fatal("fetch prediction result", err)
+		}
+
+		switch result.Status {
+		case replicateapi.PredictionStatusSucceeded, replicateapi.PredictionStatusCanceled, replicateapi.PredictionStatusFailed:
+			// Final statuses
+			keepChecking = false
+		case replicateapi.PredictionStatusProcessing, replicateapi.PredictionStatusStarting:
+			// Still processing
+		}
+	}
+	fmt.Printf("%+v\n", result)
 }
 ```
