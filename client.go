@@ -92,7 +92,7 @@ func (c *Client) CreatePrediction(ctx context.Context, input map[string]interfac
 	if err != nil {
 		return nil, errors.Wrap(err, "init new request")
 	}
-	req.Header.Add("Authorization", c.AuthorizationToken)
+	req.Header.Add("Authorization", "Token "+c.AuthorizationToken)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := c.HTTPClient.Do(req)
