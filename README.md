@@ -32,7 +32,7 @@ func main() {
 	    log.Fatal("create prediction", err)
     }
 
-    // Fetch status and results of existnig prediction
+    // Fetch status and results of existing prediction
     result, err = cli.GetResult(context.Background(), result.ID)
     if err != nil {
 	    log.Fatal("fetch prediction result", err)
