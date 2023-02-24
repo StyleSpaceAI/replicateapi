@@ -17,7 +17,7 @@ const (
 )
 
 func main() {
-    // Initialize a new API client
+	// Initialize a new API client
 	cli, err := replicateapi.NewClient(token, MODELNAME, "")
 	if err != nil {
 		log.Fatal("init client", err)
