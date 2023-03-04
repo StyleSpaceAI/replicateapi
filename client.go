@@ -65,7 +65,7 @@ type PredictionResult struct {
 	CompletedAt any                    `json:"completed_at"`
 	Status      PredictionStatus       `json:"status"`
 	Input       map[string]interface{} `json:"input"`
-	Output      map[string]interface{} `json:"output"`
+	Output      any                    `json:"output"`
 	Error       any                    `json:"error"`
 	Logs        any                    `json:"logs"`
 	Metrics     map[string]interface{} `json:"metrics"`
